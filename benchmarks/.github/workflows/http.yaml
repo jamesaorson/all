@@ -1,0 +1,69 @@
+name: HTTP benchmarks
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        framework:
+        - babashka-httpkit
+        - csharp-minimal
+        - csharp-mvc
+        - javascript-expressjs
+        - fsharp-giraffe
+        - golang-http
+        - rust-rocket
+        
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup Babashka
+      if: startsWith(matrix.framework, 'babashka-')
+      run: |
+        bash < <(curl -s https://raw.githubusercontent.com/babashka/babashka/master/install)
+
+    - name: Setup Go
+      uses: actions/setup-go@v5
+      if: startsWith(matrix.framework, 'golang-')
+      with:
+        cache-dependency-path: http/${{ matrix.framework }}/go.sum
+        go-version-file: http/${{ matrix.framework }}/go.mod
+
+    - name: Setup .NET
+      if: startsWith(matrix.framework, 'csharp-') || startsWith(matrix.framework, 'fsharp-')
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: 7.0.x
+    
+    - name: Setup Node.js
+      if: startsWith(matrix.framework, 'javascript-')
+      uses: actions/setup-node@v4
+      with:
+        node-version: 18.x
+
+    - name: Setup Rust
+      if: startsWith(matrix.framework, 'rust-')
+      run: |
+        rustup toolchain install nightly
+        rustup default nightly
+        cargo version
+
+    - name: Benchmark ${{ matrix.framework }}
+      working-directory: http
+      run: |
+        ./benchmark.bash ${{ matrix.framework }}
+    
+    - uses: actions/upload-artifact@v4
+      with:
+        name: ${{ matrix.framework }}-report
+        path: ./http/${{ matrix.framework }}.report
